@@ -43,6 +43,15 @@ SUPERCOND_GATES = {
 }
 
 
+def _movement_distance(op: cirq.Operation) -> int:
+    route_distance = getattr(op.gate, "route_distance", None)
+    if route_distance is not None:
+        return route_distance
+
+    ctrl, trgt = op.qubits
+    return abs(trgt.row - ctrl.row) + abs(trgt.col - ctrl.col)
+
+
 @lru_cache(maxsize=128)
 def _merge_cost(
     d: int,
@@ -219,6 +228,7 @@ class Architecture(abc.ABC):
                 cultivation_fault_distance=d["cultivation_fault_distance"],
                 syndrome_rounds=d["syndrome_rounds"],
                 fold_cultiv=d.get("fold_cultiv", False),
+                communication_move_factor=d.get("communication_move_factor", 2.0),
             )
         else:
             base_arc = DefaultLattice(
@@ -587,7 +597,9 @@ class DefaultMovement(Architecture):
         cultivation_repetition=1,
         cultivation_fault_distance: int = 3,
         syndrome_rounds=1,
+        communication_move_factor: float = 2.0,
     ) -> None:
+        self.communication_move_factor = communication_move_factor
         super().__init__(
             idling=idling,
             post_op_correction=post_op_correction,
@@ -604,6 +616,7 @@ class DefaultMovement(Architecture):
                 lsp.SyndromeExtract,
                 lsp.ErrorCorrect,
                 lsp.Move,
+                lsp.CommunicationMove,
                 cirq.CNOT,
                 cirq.S,
                 cirq.I,
@@ -699,14 +712,15 @@ class DefaultMovement(Architecture):
         To make things easier, I'm going to call that .5um/us
         A surface code patch has a side length of ~d physical qubits
         If we assume qubits are spaced by ~1um, it takes about 2*d us to move a qubit to an adjacent patch
-        So if the L1 distance between logical qubits A and B is C, then we penalize Move(A, B) with time 2*C*d (up to a maximum of 500us)
+        So if the routed cell distance between logical qubits A and B is C, then we
+        penalize Move(A, B) with time 2*C*d (up to a maximum of 500us). If a layout
+        does not provide a route distance, this falls back to endpoint L1 distance.
         This feels a little too weighted in favor of alleyway movement, but it is at least a rule, and it's something worth debating
         """
         gate_cost = {cirq.QubitPermutationGate: 1}
         moment_cost = {cirq.QubitPermutationGate: 1}
         if op.gate.zone is None:
-            ctrl, trgt = op.qubits
-            distance = abs(trgt.row - ctrl.row) + abs(trgt.col - ctrl.col)
+            distance = _movement_distance(op)
             penalty_factor = 2 * self.d * distance
             time_cap = self.phys_gate_times[cirq.QubitPermutationGate]
             op_time = min(penalty_factor, time_cap)
@@ -714,6 +728,23 @@ class DefaultMovement(Architecture):
             op_time = self.phys_gate_times[
                 cirq.QubitPermutationGate
             ]  # Just a basic penalty based on the literature
+        return {"op_time": op_time, "gate_cost": gate_cost, "moment_cost": moment_cost}
+
+    def communication_move_cost(self, op):
+        """
+        Cost of a movement hop through a dedicated communication region.
+
+        This starts from the local inter-patch movement model and applies a separate
+        factor so heterogeneous layouts can tune communication-fabric traffic without
+        changing monolithic movement costs.
+        """
+        distance = _movement_distance(op)
+        penalty_factor = self.communication_move_factor * 2 * self.d * distance
+        time_cap = self.communication_move_factor * self.phys_gate_times[cirq.QubitPermutationGate]
+        gate_count = self.communication_move_factor
+        gate_cost = {cirq.QubitPermutationGate: gate_count}
+        moment_cost = {cirq.QubitPermutationGate: gate_count}
+        op_time = min(penalty_factor, time_cap)
         return {"op_time": op_time, "gate_cost": gate_cost, "moment_cost": moment_cost}
 
     @cached_property
@@ -759,6 +790,7 @@ class DefaultMovement(Architecture):
         self.op_cost[type(cirq.CNOT)] = self.cnot_cost
         self.op_cost[type(cirq.S)] = self.s_cost
         self.op_cost[lsp.Move] = self.move_cost
+        self.op_cost[lsp.CommunicationMove] = self.communication_move_cost
 
     @property
     def __name__(self) -> str:

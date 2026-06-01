@@ -222,7 +222,10 @@ def test_serialization():
             lsp.Cultivate(1.0).on(qubit_a),
             lsp.Move(zone="interact").on_each(qubit_a, qubit_b),
             lsp.Move(zone=None).on(qubit_a, qubit_b),
+            lsp.Move(zone=None, route_distance=5).on(qubit_a, qubit_b),
             lsp.Move(zone="measure").on(qubit_a),
+            lsp.CommunicationMove().on(qubit_a, qubit_b),
+            lsp.CommunicationMove(route_distance=5).on(qubit_a, qubit_b),
         ]
     )
     print(circuit)
@@ -270,8 +273,26 @@ def test_repr():
     move = lsp.Move(zone=None).on(qa, qb)
     assert repr(move) == "lsp.Move(zone=None).on(cirq.LineQubit(0), cirq.LineQubit(1))"
 
+    move = lsp.Move(zone=None, route_distance=5).on(qa, qb)
+    assert (
+        repr(move)
+        == "lsp.Move(zone=None, route_distance=5).on(cirq.LineQubit(0), cirq.LineQubit(1))"
+    )
+
     move = lsp.Move(zone="measure").on(qa)
     assert repr(move) == "lsp.Move(zone=measure).on(cirq.LineQubit(0))"
+
+    communication_move = lsp.CommunicationMove().on(qa, qb)
+    assert (
+        repr(communication_move)
+        == "lsp.CommunicationMove()(cirq.LineQubit(0), cirq.LineQubit(1))"
+    )
+
+    communication_move = lsp.CommunicationMove(route_distance=5).on(qa, qb)
+    assert (
+        repr(communication_move)
+        == "lsp.CommunicationMove(route_distance=5)(cirq.LineQubit(0), cirq.LineQubit(1))"
+    )
 
 
 def test_patch_eq_and_hash():

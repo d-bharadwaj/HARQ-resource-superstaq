@@ -114,6 +114,8 @@ def teleport_T(op: cirq.Operation, layout: Layout) -> list[cirq.Operation]:
         layout.reload_factories("t")
     data_qubit = op.qubits[0]
     factory_qubit = layout.nearest_factory(data_qubit, ftype="t")
+    if hasattr(layout, "moves_for_factory_to_compute"):
+        operations += layout.moves_for_factory_to_compute(factory_qubit, data_qubit)
     operations += [
         cirq.CNOT.on(factory_qubit, data_qubit),
         cirq.MeasurementGate(1, key="").on(factory_qubit),
@@ -136,6 +138,8 @@ def teleport_S(op: cirq.Operation, layout: Layout) -> list[cirq.Operation]:
         layout.reload_factories("s")
     data_qubit = op.qubits[0]
     factory_qubit = layout.nearest_factory(data_qubit, ftype="s")
+    if hasattr(layout, "moves_for_factory_to_compute"):
+        operations += layout.moves_for_factory_to_compute(factory_qubit, data_qubit)
     operations += [
         cirq.CNOT.on(factory_qubit, data_qubit),
         cirq.MeasurementGate(1, key="").on(factory_qubit),
@@ -260,7 +264,11 @@ def post_op_syndrome_extraction(
     return cirq.map_operations_and_unroll(circuit, _map_func, raise_if_add_qubits=False)
 
 
-def validate_ops(circuit: cirq.Circuit, verbose: int = 1):
+def validate_ops(
+    circuit: cirq.Circuit,
+    verbose: int = 1,
+    primitives: cirq.Gateset | None = None,
+):
     """
     Checks that the given circuit is in the Clifford+T gateset.
     """
@@ -281,7 +289,9 @@ def validate_ops(circuit: cirq.Circuit, verbose: int = 1):
     )
     total_ops = len(list(circuit.all_operations()))
     if not all(
-        op.gate in valid_gates or isinstance(op.gate, valid_types)
+        op.gate in valid_gates
+        or isinstance(op.gate, valid_types)
+        or (primitives is not None and op in primitives)
         for op in tqdm(circuit.all_operations(), total=total_ops, disable=not verbose)
     ):
         raise ValueError(f"This compiler only handles Clifford + Rz circuits")
@@ -371,7 +381,7 @@ def ft_compile(
     if skip_validation:  # pragma: no cover
         print("Validation Turned Off")
     else:
-        validate_ops(circuit, verbose=verbose)
+        validate_ops(circuit, verbose=verbose, primitives=arc.primitives)
 
     circuit = _decompose_to_primitives(circuit, layout=layout, arc=arc)
     if verbose > 1:

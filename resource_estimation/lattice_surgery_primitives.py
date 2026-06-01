@@ -34,6 +34,8 @@ def custom_resolver(cirq_type: str) -> type[cirq.Gate] | None:
         return ErrorCorrect
     if cirq_type == "lsp.Move":
         return Move
+    if cirq_type == "lsp.CommunicationMove":
+        return CommunicationMove
 
 
 @cirq.value_equality
@@ -240,15 +242,22 @@ class Cultivate(cirq.Gate):
 @cirq.value_equality
 class Move(cirq.Gate):
     """
-    Subclassed cirq gate to represent a iter-patch movement operation
+    Subclassed cirq gate to represent a inter-patch movement operation
 
     It is currently used to describe both movement to a zone and movement through alleyways to other
     logical qubit patches.
     """
 
-    def __init__(self, zone: Literal[None, "measure", "interact"] = None):
+    def __init__(
+        self,
+        zone: Literal[None, "measure", "interact"] = None,
+        route_distance: int | None = None,
+    ):
+        if route_distance is not None and route_distance < 1:
+            raise ValueError("route_distance must be positive when provided")
         self._num_qubits = 2 if zone is None else 1
         self._zone = zone
+        self._route_distance = route_distance
 
     def num_qubits(self):
         return self._num_qubits
@@ -257,6 +266,10 @@ class Move(cirq.Gate):
     def zone(self):
         return self._zone
 
+    @property
+    def route_distance(self):
+        return self._route_distance
+
     def __str__(self):
         if self.zone is None:
             return "MOVE"
@@ -264,17 +277,56 @@ class Move(cirq.Gate):
             return "MOVE_MZ" if self.zone == "measure" else "MOVE_IZ"
 
     def _json_dict_(self):
-        return {"zone": self._zone}
+        return {"zone": self._zone, "route_distance": self._route_distance}
 
     def __repr__(self) -> str:
-        return f"lsp.Move(zone={self._zone})"
+        if self._route_distance is None:
+            return f"lsp.Move(zone={self._zone})"
+        return f"lsp.Move(zone={self._zone}, route_distance={self._route_distance})"
 
     @classmethod
     def _json_namespace_(cls) -> str:
         return "lsp"
 
     def _value_equality_values_(self) -> int:
-        return self._num_qubits, self._zone
+        return self._num_qubits, self._zone, self._route_distance
+
+
+@cirq.value_equality
+class CommunicationMove(cirq.Gate):
+    """
+    Inter-patch movement through a dedicated communication region.
+    """
+
+    def __init__(self, route_distance: int | None = None):
+        if route_distance is not None and route_distance < 1:
+            raise ValueError("route_distance must be positive when provided")
+        self._route_distance = route_distance
+
+    def num_qubits(self):
+        return 2
+
+    @property
+    def route_distance(self):
+        return self._route_distance
+
+    def __str__(self):
+        return "COMM_MOVE"
+
+    def _json_dict_(self):
+        return {"route_distance": self._route_distance}
+
+    def __repr__(self) -> str:
+        if self._route_distance is not None:
+            return f"lsp.CommunicationMove(route_distance={self._route_distance})"
+        return "lsp.CommunicationMove()"
+
+    @classmethod
+    def _json_namespace_(cls) -> str:
+        return "lsp"
+
+    def _value_equality_values_(self) -> tuple:
+        return (self._route_distance,)
 
 
 class RotatedCodePatch:

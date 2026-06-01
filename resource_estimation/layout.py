@@ -16,9 +16,11 @@ import cirq
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+from . import lattice_surgery_primitives as lsp
 from collections import deque
 from dataclasses import dataclass
 from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.patches import Patch
 from typing import Literal
 from math import ceil, sqrt
 from itertools import combinations, product
@@ -28,6 +30,9 @@ _DATA = 1
 _ANCILLA = 2
 _S_FACTORY = 3
 _T_FACTORY = 4
+_MEMORY = 5
+_COMPUTE = 6
+_COMMUNICATION = 7
 
 _LAYOUT_CMAP = ListedColormap(
     [
@@ -36,9 +41,21 @@ _LAYOUT_CMAP = ListedColormap(
         "#F5BFC8",  # ancilla patch — light pink
         "#FFD4A3",  # S factory — light orange
         "#6EC6E6",  # T factory — cyan
+        "#B9D7F5",  # memory region — light blue
+        "#B8E3C2",  # compute region — green
+        "#D8C7F2",  # communication region — lavender
     ]
 )
-_LAYOUT_NORM = BoundaryNorm([-0.5, 0.5, 1.5, 2.5, 3.5, 4.5], _LAYOUT_CMAP.N)
+_LAYOUT_NORM = BoundaryNorm([-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5], _LAYOUT_CMAP.N)
+_LAYOUT_LABELS = {
+    _DATA: "Data qubit",
+    _ANCILLA: "Ancilla qubit",
+    _S_FACTORY: "S factory",
+    _T_FACTORY: "T factory",
+    _MEMORY: "Memory region",
+    _COMPUTE: "Compute region",
+    _COMMUNICATION: "Communication region",
+}
 
 
 @dataclass
@@ -202,29 +219,36 @@ class Layout(abc.ABC):
         path = nx.dijkstra_path(G=G, source=ctrl, target=trgt, weight=custom_weight)
         return path
 
-    def draw(self) -> None:  # pragma: no cover
+    def draw(self, show_legend: bool = True) -> None:  # pragma: no cover
         """
         Draw method to display layouts clearly
-        Red and yellow nodes correspond to T and S factories, respectively
-        Green nodes correspond to data (logical) qubits
-        Blue nodes correspond to ancilla qubits
         """
         color_dict = {
-            "t": "red",
-            "s": "yellow",
-            "data": "green",
-            "ancilla": "blue",
+            _T_FACTORY: _LAYOUT_CMAP.colors[_T_FACTORY],
+            _S_FACTORY: _LAYOUT_CMAP.colors[_S_FACTORY],
+            _DATA: _LAYOUT_CMAP.colors[_DATA],
+            _ANCILLA: _LAYOUT_CMAP.colors[_ANCILLA],
+            _MEMORY: _LAYOUT_CMAP.colors[_MEMORY],
+            _COMPUTE: _LAYOUT_CMAP.colors[_COMPUTE],
+            _COMMUNICATION: _LAYOUT_CMAP.colors[_COMMUNICATION],
         }
         G = self.layout_graph
         node_color = []
         for node in G.nodes:
-            node_dict = G.nodes[node]
-            key = node_dict["ftype"] if "ftype" in node_dict else node_dict["patch_type"]
-            node_color.append(color_dict[key])
+            node_color.append(color_dict[self._patch_code(G.nodes[node])])
         pos = {node: (node.row, node.col) for node in G.nodes}
         nx.draw(G, with_labels=True, node_color=node_color, pos=pos)
+        if show_legend:
+            plt.gca().legend(handles=self._legend_handles(), loc="upper left", bbox_to_anchor=(1, 1))
 
     def _patch_code(self, node_dict: dict) -> int:
+        region = node_dict.get("region")
+        if region == "memory":
+            return _MEMORY
+        if region == "compute":
+            return _COMPUTE
+        if region == "communication":
+            return _COMMUNICATION
         if node_dict["patch_type"] == "data":
             return _DATA
         if node_dict["patch_type"] == "ancilla":
@@ -264,6 +288,14 @@ class Layout(abc.ABC):
             grid[node.row + row_offset, node.col + col_offset] = self._patch_code(G.nodes[node])
         return grid
 
+    def _legend_handles(self) -> list[Patch]:
+        present_codes = sorted({self._patch_code(self.layout_graph.nodes[node]) for node in self.layout_graph})
+        return [
+            Patch(facecolor=_LAYOUT_CMAP.colors[code], edgecolor="lightgray", label=_LAYOUT_LABELS[code])
+            for code in present_codes
+            if code in _LAYOUT_LABELS
+        ]
+
     def visualize_layout(
         self,
         title: str | None = None,
@@ -271,12 +303,14 @@ class Layout(abc.ABC):
         padding: int = 2,
         ax: plt.Axes | None = None,
         show: bool = True,
+        show_legend: bool = True,
     ) -> plt.Axes | None:  # pragma: no cover
         """
         Render the layout as a colored grid.
 
         Colors: white (empty), light green (data qubits), light pink (ancilla),
-        light orange (S factories), cyan (T factories).
+        light orange (S factories), cyan (T factories). Region-aware layouts
+        additionally show memory in blue, compute in green, and communication in purple.
         """
         grid = self._layout_grid(grid_size=grid_size, padding=padding)
         height, width = grid.shape
@@ -308,6 +342,8 @@ class Layout(abc.ABC):
             spine.set_color("black")
         if title is not None:
             ax.set_title(title)
+        if show_legend:
+            ax.legend(handles=self._legend_handles(), loc="upper left", bbox_to_anchor=(1, 1))
         if show and created_fig:
             plt.show()
             return None
@@ -327,6 +363,234 @@ class MovementLayout(Layout):
         super().__init__(
             input_circuit=input_circuit, num_t_factories=num_t_factories, num_s_factories=0
         )
+
+    def route_cnot(self, ctrl: cirq.GridQubit, trgt: cirq.GridQubit):
+        raise NotImplementedError
+
+
+class Heterogenous_MovementLayout(Layout):
+    """
+    Movement layout with explicit memory, compute, communication, and factory regions.
+
+    Logical circuit qubits start in memory. Each input operation is serialized by moving its
+    operands into compute slots, applying the operation there, and moving the operands back.
+    """
+
+    def __init__(
+        self,
+        input_circuit: cirq.Circuit,
+        num_t_factories: int = 1,
+        num_s_factories: int | None = None,
+        compute_capacity: int = 4,
+        communication_width: int | None = None,
+    ):
+        self.compute_capacity = compute_capacity
+        self.communication_width = communication_width
+        super().__init__(
+            input_circuit=input_circuit,
+            num_t_factories=num_t_factories,
+            num_s_factories=num_t_factories if num_s_factories is None else num_s_factories,
+        )
+
+    def _generate(self) -> None:
+        all_qubits = sorted(self.input_circuit.all_qubits())
+        if self.compute_capacity < 1:
+            raise ValueError("compute_capacity must be at least 1")
+        communication_width = (
+            max(2, ceil(len(all_qubits) / 10))
+            if self.communication_width is None
+            else self.communication_width
+        )
+        if communication_width < 1:
+            raise ValueError("communication_width must be at least 1")
+        max_arity = max((len(op.qubits) for op in self.input_circuit.all_operations()), default=1)
+        if self.compute_capacity < max_arity:
+            raise ValueError(
+                "compute_capacity must be at least as large as the widest operation "
+                f"in the circuit ({max_arity})"
+            )
+
+        memory_width = max(1, ceil(sqrt(len(all_qubits))))
+        memory_height = max(1, ceil(len(all_qubits) / memory_width))
+        compute_width = min(2, self.compute_capacity)
+        compute_height = ceil(self.compute_capacity / compute_width)
+        factory_count = self.num_t_factories + self.num_s_factories
+        height = max(memory_height, compute_height + factory_count, 1)
+
+        memory_positions = [
+            cirq.GridQubit(row, col)
+            for row in range(memory_height)
+            for col in range(memory_width)
+        ][: len(all_qubits)]
+        communication_start_col = memory_width
+        communication = [
+            cirq.GridQubit(row, communication_start_col + col)
+            for row in range(height)
+            for col in range(communication_width)
+        ]
+
+        compute_col = communication_start_col + communication_width
+        compute_positions = [
+            cirq.GridQubit(row, compute_col + col)
+            for row in range(compute_height)
+            for col in range(compute_width)
+        ][: self.compute_capacity]
+
+        factory_col = compute_col
+        factory_start_row = compute_height
+        t_factories = [
+            cirq.GridQubit(factory_start_row + row, factory_col)
+            for row in range(self.num_t_factories)
+        ]
+        s_factories = [
+            cirq.GridQubit(factory_start_row + row + self.num_t_factories, factory_col)
+            for row in range(self.num_s_factories)
+        ]
+
+        qubit_map = dict(zip(all_qubits, memory_positions))
+        self._memory_map = qubit_map
+        self._compute_slots = compute_positions
+
+        G = nx.Graph()
+        G.add_nodes_from(
+            [(q, dict(patch_type="data", region="memory")) for q in memory_positions],
+        )
+        G.add_nodes_from(
+            [(q, dict(patch_type="data", region="compute")) for q in compute_positions],
+        )
+        G.add_nodes_from(
+            [(q, dict(patch_type="ancilla", region="communication")) for q in communication],
+        )
+        G.add_nodes_from(
+            [
+                (q, dict(patch_type="factory", ftype="t", region="factory", used=True))
+                for q in t_factories
+            ],
+        )
+        G.add_nodes_from(
+            [
+                (q, dict(patch_type="factory", ftype="s", region="factory", used=True))
+                for q in s_factories
+            ],
+        )
+        for node in G.nodes:
+            for d_row, d_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                neighbor = cirq.GridQubit(node.row + d_row, node.col + d_col)
+                if neighbor in G:
+                    G.add_edge(node, neighbor)
+        self._all_factories = {node for node in G if G.nodes[node]["patch_type"] == "factory"}
+        self.layout_graph = G
+        self.mapped_circuit = self._memory_compute_circuit(qubit_map, compute_positions)
+        # Make passive regional capacity visible to circuit-based physical-qubit accounting.
+        self.mapped_circuit = cirq.Circuit(cirq.I.on_each(*sorted(G.nodes))) + self.mapped_circuit
+
+    def _memory_compute_circuit(
+        self,
+        qubit_map: dict[cirq.Qid, cirq.GridQubit],
+        compute_slots: list[cirq.GridQubit],
+    ) -> cirq.Circuit:
+        regional_circuit = cirq.Circuit()
+        for op in self.input_circuit.all_operations():
+            op_qubits = list(op.qubits)
+            active_slots = compute_slots[: len(op_qubits)]
+            to_compute = {
+                qubit: slot for qubit, slot in zip(op_qubits, active_slots)
+            }
+            for qubit, slot in to_compute.items():
+                regional_circuit += self._moves_along_path(
+                    self.route_through_communication(qubit_map[qubit], slot)
+                )
+            regional_circuit += cirq.Moment(op.transform_qubits(to_compute))
+            for qubit, slot in to_compute.items():
+                regional_circuit += self._moves_along_path(
+                    self.route_through_communication(slot, qubit_map[qubit])
+                )
+        return regional_circuit
+
+    def route_through_communication(
+        self,
+        source: cirq.GridQubit,
+        target: cirq.GridQubit,
+    ) -> list[cirq.GridQubit]:
+        """
+        Find a shortest route between regions while forcing intermediate hops through communication.
+        """
+        graph = self.layout_graph
+
+        def weight(
+            left: cirq.GridQubit,
+            right: cirq.GridQubit,
+            _attrs: dict,
+        ) -> int | None:
+            left_region = graph.nodes[left].get("region")
+            right_region = graph.nodes[right].get("region")
+            if left_region == right_region:
+                return 1
+            if "communication" in (left_region, right_region):
+                return 1
+            return None
+
+        return nx.dijkstra_path(graph, source=source, target=target, weight=weight)
+
+    def route_factory_to_compute(
+        self,
+        factory: cirq.GridQubit,
+        compute_qubit: cirq.GridQubit,
+    ) -> list[cirq.GridQubit]:
+        """
+        Find the communication-mediated path needed for factory/data teleportation.
+        """
+        return self.route_through_communication(factory, compute_qubit)
+
+    def nearest_factory(self, qubit: cirq.GridQubit, ftype: Literal["s", "t"]) -> cirq.GridQubit:
+        """
+        Select the available factory with the shortest communication-mediated route.
+        """
+        available_factories = (
+            self.available_s_factories if ftype == "s" else self.available_t_factories
+        )
+        if not available_factories:
+            raise ValueError(f"No available {ftype} factories available!")
+
+        factory = min(
+            available_factories,
+            key=lambda candidate: len(self.route_factory_to_compute(candidate, qubit)),
+        )
+        self.layout_graph.nodes[factory]["used"] = True
+        available_factories.remove(factory)
+        if ftype == "s":
+            self._available_s_factories = available_factories
+        else:
+            self._available_t_factories = available_factories
+        return factory
+
+    def moves_for_factory_to_compute(
+        self,
+        factory: cirq.GridQubit,
+        compute_qubit: cirq.GridQubit,
+    ) -> list[cirq.Operation]:
+        """
+        Movement operations representing the route that makes a factory/data CNOT local.
+        """
+        return list(
+            self._moves_along_path(
+                self.route_factory_to_compute(factory, compute_qubit)
+            ).all_operations()
+        )
+
+    def _moves_along_path(self, path: list[cirq.GridQubit]) -> cirq.Circuit:
+        operations = []
+        for left, right in zip(path, path[1:]):
+            regions = {
+                self.layout_graph.nodes[left].get("region"),
+                self.layout_graph.nodes[right].get("region"),
+            }
+            if "communication" in regions:
+                move_gate = lsp.CommunicationMove(route_distance=1)
+            else:
+                move_gate = lsp.Move(zone=None, route_distance=1)
+            operations.append(move_gate.on(left, right))
+        return cirq.Circuit(operations)
 
     def route_cnot(self, ctrl: cirq.GridQubit, trgt: cirq.GridQubit):
         raise NotImplementedError

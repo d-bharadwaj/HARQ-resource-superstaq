@@ -1,0 +1,77 @@
+{
+    "filename": "circuits/example.json",
+    "program_fidelity": 0.99,
+    "num_factories": 20,
+    "arch_name": "ssm",
+    "fold_cultiv": false,
+    "load_time": 0.001958131790161133,
+    "rz_width": 8,
+    "rz_depth": 457,
+    "rz_gates": 132,
+    "non_rz_gates": 549,
+    "rz_time": 0.43599414825439453,
+    "eps": 3.797308069786176e-05,
+    "t_gates": 4959,
+    "non_t_gates": 8263,
+    "cliff_t_width": 8,
+    "cliff_t_depth": 10357,
+    "cliff_t_time": 1.2614779472351074,
+    "cultivation_repetition": 100,
+    "cultivation_fault_distance": 5,
+    "distance": 13,
+    "expected_fidelity": 0.9987228521231378,
+    "qec_time": 0.002022981643676758,
+    "primitive_width": 28,
+    "primitive_depth": 46999,
+    "compile_time": 2.4116790294647217,
+    "time_serial": 2055090862717.91,
+    "time_parallel": 6050347672.96,
+    "gates_serial": {
+        "MeasurementGate": [
+            1361427967,
+            1361427967000
+        ],
+        "CZ": [
+            5299274233,
+            1430804042.91
+        ],
+        "ResetChannel": [
+            1451045079,
+            580418031600
+        ],
+        "PhasedXZGate": [
+            1489893615,
+            7449468075.0
+        ],
+        "QubitPermutationGate": [
+            208729184,
+            104364592000
+        ]
+    },
+    "gates_parallel": {
+        "ResetChannel": [
+            599100,
+            239640000
+        ],
+        "PhasedXZGate": [
+            1300216,
+            6501080.0
+        ],
+        "CZ": [
+            4654048,
+            1256592.9600000002
+        ],
+        "MeasurementGate": [
+            574300,
+            574300000
+        ],
+        "QubitPermutationGate": [
+            10457300,
+            5228650000
+        ]
+    },
+    "physical_qubits": 9436,
+    "volume": 57091080642050.56,
+    "resource_time": 0.7847738265991211,
+    "total_time": 5.1242570877075195
+}
