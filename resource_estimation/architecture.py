@@ -23,6 +23,7 @@ from . import lattice_surgery_primitives as lsp
 from cirq_superstaq.ops.qubit_gates import ParallelRGate
 from resource_estimation.stim_functions import cultivate
 import abc
+from dataclasses import dataclass
 
 
 NEUTRAL_GATES = {  # From Harvard paper (https://arxiv.org/pdf/2506.20661)
@@ -986,6 +987,198 @@ class Superconductor(DefaultLattice):
     @property
     def __name__(self) -> str:
         return "Superconductor"
+
+
+@dataclass
+class RegionalArchitecture:
+    """
+    Facade for layouts whose regions are backed by different architecture models.
+
+    This deliberately does not inherit from Architecture because each region owns
+    its own code distance, primitive set, and timing model.
+    """
+
+    memory: Architecture
+    communication: Architecture
+    compute: Architecture
+    factory: Architecture
+    transfer_penalty: float = 1.0
+
+    is_regional = True
+
+    @classmethod
+    def square_default(
+        cls,
+        d: int = 7,
+        cultivation_repetition: int = 1,
+        cultivation_fault_distance: int = 3,
+        syndrome_rounds: int = 1,
+        communication_move_factor: float = 2.0,
+        transfer_penalty: float = 1.0,
+        idling: bool = False,
+        post_op_correction: bool = True,
+    ) -> "RegionalArchitecture":
+        movement_kwargs = dict(
+            d=d,
+            cultivation_repetition=cultivation_repetition,
+            cultivation_fault_distance=cultivation_fault_distance,
+            syndrome_rounds=syndrome_rounds,
+            communication_move_factor=communication_move_factor,
+            idling=idling,
+            post_op_correction=post_op_correction,
+        )
+        lattice_kwargs = dict(
+            d=d,
+            cultivation_repetition=cultivation_repetition,
+            cultivation_fault_distance=cultivation_fault_distance,
+            syndrome_rounds=syndrome_rounds,
+            idling=idling,
+            post_op_correction=post_op_correction,
+        )
+        return cls(
+            memory=DefaultMovement(**movement_kwargs),
+            communication=DefaultMovement(**movement_kwargs),
+            compute=Superconductor(**lattice_kwargs),
+            factory=Superconductor(**lattice_kwargs),
+            transfer_penalty=transfer_penalty,
+        )
+
+    @property
+    def regions(self) -> dict[str, Architecture]:
+        return {
+            "memory": self.memory,
+            "communication": self.communication,
+            "compute": self.compute,
+            "factory": self.factory,
+        }
+
+    @property
+    def primitives(self) -> cirq.Gateset:
+        gates = []
+        for region_arch in self.regions.values():
+            gates.extend(gate_family._gate for gate_family in region_arch.primitives.gates)
+        gates.append(lsp.ModalityTransfer)
+        return cirq.Gateset(*gates)
+
+    @property
+    def rounds(self) -> int:
+        return self.compute.rounds
+
+    @property
+    def idling(self) -> bool:
+        return any(region_arch.idling for region_arch in self.regions.values())
+
+    @property
+    def post_op_correction(self) -> bool:
+        return any(region_arch.post_op_correction for region_arch in self.regions.values())
+
+    @property
+    def movement(self) -> bool:
+        return any(region_arch.movement for region_arch in self.regions.values())
+
+    @property
+    def zone_ops(self):
+        return self.communication.zone_ops
+
+    @property
+    def alley_ops(self):
+        return self.communication.alley_ops
+
+    def arch_for_region(self, region: str | None) -> Architecture:
+        if region in self.regions:
+            return self.regions[region]
+        return self.compute
+
+    def regions_for_operation(self, op: cirq.Operation, layout=None) -> set[str]:
+        if isinstance(op.gate, lsp.ModalityTransfer):
+            return {r for r in (op.gate.source, op.gate.target) if r is not None}
+        if layout is None or getattr(layout, "layout_graph", None) is None:
+            return {"compute"}
+        graph = layout.layout_graph
+        return {
+            graph.nodes[qubit].get("region", "compute")
+            for qubit in op.qubits
+            if qubit in graph
+        } or {"compute"}
+
+    def region_for_operation(self, op: cirq.Operation, layout=None) -> str:
+        regions = self.regions_for_operation(op, layout)
+        if isinstance(op.gate, lsp.ModalityTransfer):
+            return self._slowest_region(regions)
+        if isinstance(op.gate, (lsp.Move, lsp.CommunicationMove)):
+            return "communication" if "communication" in regions else "memory"
+        if "compute" in regions:
+            return "compute"
+        if "factory" in regions:
+            return "factory"
+        if "communication" in regions:
+            return "communication"
+        return "memory"
+
+    def arch_for_operation(self, op: cirq.Operation, layout=None) -> Architecture:
+        return self.arch_for_region(self.region_for_operation(op, layout))
+
+    def _slowest_region(self, regions: set[str]) -> str:
+        if not regions:
+            return "compute"
+        return max(
+            regions,
+            key=lambda region: max(self.arch_for_region(region).phys_gate_times.values()),
+        )
+
+    def modality_transfer_cost(self, op: cirq.Operation, layout=None) -> dict:
+        regions = self.regions_for_operation(op, layout)
+        if not regions and len(op.qubits) == 2 and layout is not None:
+            regions = self.regions_for_operation(op, layout)
+        slowest_region = self._slowest_region(regions)
+        slowest_arch = self.arch_for_region(slowest_region)
+        op_time = self.transfer_penalty * max(slowest_arch.phys_gate_times.values())
+        gate_cost = {lsp.ModalityTransfer: 1}
+        moment_cost = {lsp.ModalityTransfer: 1}
+        return {"op_time": op_time, "gate_cost": gate_cost, "moment_cost": moment_cost}
+
+    def gate_cost(self, op: cirq.Operation, layout=None) -> dict:
+        if isinstance(op.gate, lsp.ModalityTransfer):
+            return self.modality_transfer_cost(op, layout)["gate_cost"]
+        return self.arch_for_operation(op, layout).gate_cost(op)
+
+    def moment_cost(self, op: cirq.Operation, layout=None) -> dict:
+        if isinstance(op.gate, lsp.ModalityTransfer):
+            return self.modality_transfer_cost(op, layout)["moment_cost"]
+        return self.arch_for_operation(op, layout).moment_cost(op)
+
+    def op_time(self, op: cirq.Operation, layout=None) -> float:
+        if isinstance(op.gate, lsp.ModalityTransfer):
+            return self.modality_transfer_cost(op, layout)["op_time"]
+        return self.arch_for_operation(op, layout).op_time(op)
+
+    def total_time(self, moment_cost_dict: dict) -> float:
+        total = 0.0
+        for gate, count in moment_cost_dict.items():
+            if gate is lsp.ModalityTransfer:
+                total += count * self.transfer_penalty * max(
+                    max(region_arch.phys_gate_times.values())
+                    for region_arch in self.regions.values()
+                )
+                continue
+            total += count * max(
+                (
+                    region_arch.phys_gate_times[gate]
+                    for region_arch in self.regions.values()
+                    if gate in region_arch.phys_gate_times
+                ),
+                default=0.0,
+            )
+        return total
+
+    def __str__(self) -> str:
+        return (
+            "RegionalArchitecture("
+            f"memory={self.memory.__name__}, "
+            f"communication={self.communication.__name__}, "
+            f"compute={self.compute.__name__}, "
+            f"factory={self.factory.__name__})"
+        )
 
 
 # Deprecated by removing GR gates

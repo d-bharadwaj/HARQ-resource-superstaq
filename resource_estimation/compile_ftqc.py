@@ -213,6 +213,8 @@ def post_op_syndrome_extraction(
     with_barriers: bool,
     movement: bool,
     rounds: int,
+    arc: arch.Architecture | None = None,
+    layout: Layout | None = None,
     verbose: int = 0,
 ) -> cirq.Circuit:
     """
@@ -221,16 +223,6 @@ def post_op_syndrome_extraction(
 
     # Allowing a little bit of flexibility on what we want to correct
     # Might even want to add Lattice Primitives, but there aren't many (any?) that are not implicitly corrected
-    ops_to_correct = [
-        cirq.CNOT,
-        cirq.S,
-        # cirq.X,
-        # cirq.Z,
-    ]
-    if movement:
-        ops_to_correct.append(cirq.H)
-
-    syndrom_extract = lsp.SyndromeExtract(1, rounds)
     barrier = css.barrier(*sorted(circuit.all_qubits()))
 
     total = len(circuit)
@@ -250,13 +242,29 @@ def post_op_syndrome_extraction(
         if with_barriers and not isinstance(op.gate, Barrier):
             yield barrier
 
+        op_arch = (
+            arc.arch_for_operation(op, layout)
+            if getattr(arc, "is_regional", False)
+            else None
+        )
+        op_movement = movement if op_arch is None else op_arch.movement
+        op_rounds = rounds if op_arch is None else op_arch.rounds
+        ops_to_correct = [
+            cirq.CNOT,
+            cirq.S,
+            # cirq.X,
+            # cirq.Z,
+        ]
+        if op_movement:
+            ops_to_correct.append(cirq.H)
+
         qubits_to_correct = [
             q
             for q in op.qubits
             if op.gate in ops_to_correct or isinstance(op.gate, cirq.MeasurementGate)
         ]
         if qubits_to_correct:
-            yield from syndrom_extract.on_each(*qubits_to_correct)
+            yield from lsp.SyndromeExtract(1, op_rounds).on_each(*qubits_to_correct)
 
             if with_barriers:
                 yield barrier
@@ -302,19 +310,47 @@ def _decompose_to_primitives(
     layout: Layout,
     arc: arch.Architecture,
 ) -> tuple[cirq.Circuit, list[cirq.GridQubit]]:
-    primitives = cirq.Gateset(
-        *(cirq.GateFamily(g._gate, ignore_global_phase=False) for g in arc.primitives.gates)
-    )
-    transversal_cnot = cirq.CX in primitives
+    is_regional = getattr(arc, "is_regional", False)
+    if is_regional:
 
-    def _map_fn(op: cirq.Operation) -> list[cirq.Operation]:
-        return replace_cirq_op(op=op, layout=layout, transversal_cnot=transversal_cnot)
+        def _primitive_gateset(op: cirq.Operation) -> cirq.Gateset:
+            op_arch = arc.arch_for_operation(op, layout)
+            return cirq.Gateset(
+                *(
+                    cirq.GateFamily(g._gate, ignore_global_phase=False)
+                    for g in op_arch.primitives.gates
+                ),
+                lsp.ModalityTransfer,
+            )
+
+        def _keep(op: cirq.Operation) -> bool:
+            return op in _primitive_gateset(op)
+
+        def _map_fn(op: cirq.Operation) -> list[cirq.Operation]:
+            primitives = _primitive_gateset(op)
+            return replace_cirq_op(
+                op=op,
+                layout=layout,
+                transversal_cnot=cirq.CX in primitives,
+            )
+
+    else:
+        primitives = cirq.Gateset(
+            *(cirq.GateFamily(g._gate, ignore_global_phase=False) for g in arc.primitives.gates)
+        )
+        transversal_cnot = cirq.CX in primitives
+
+        def _keep(op: cirq.Operation) -> bool:
+            return op in primitives
+
+        def _map_fn(op: cirq.Operation) -> list[cirq.Operation]:
+            return replace_cirq_op(op=op, layout=layout, transversal_cnot=transversal_cnot)
 
     # TODO: can we turn layout into a decomposition_context?
     ops = cirq.decompose(
         circuit,
         intercepting_decomposer=_map_fn,
-        keep=primitives.__contains__,
+        keep=_keep,
     )
     return cirq.Circuit(ops)
 
@@ -390,7 +426,16 @@ def ft_compile(
     # Handling State Prep
     # In a more optimized world this could happen the moment before the first logical operation
     logical_qubits = [node for node in G.nodes if G.nodes[node]["patch_type"] == "data"]
-    state_prep = cirq.Circuit(lsp.SyndromeExtract(1, rounds=arc.rounds).on_each(*logical_qubits))
+    if getattr(arc, "is_regional", False):
+        state_prep = cirq.Circuit(
+            lsp.SyndromeExtract(
+                1,
+                rounds=arc.arch_for_region(G.nodes[qubit].get("region")).rounds,
+            ).on(qubit)
+            for qubit in logical_qubits
+        )
+    else:
+        state_prep = cirq.Circuit(lsp.SyndromeExtract(1, rounds=arc.rounds).on_each(*logical_qubits))
     if with_barriers:
         state_prep += css.barrier(*sorted(circuit.all_qubits()))
     circuit = state_prep + circuit
@@ -401,6 +446,8 @@ def ft_compile(
             movement=arc.movement,
             with_barriers=with_barriers,
             rounds=arc.rounds,
+            arc=arc,
+            layout=layout,
             verbose=verbose,
         )
 
@@ -424,7 +471,9 @@ def ft_compile(
                 num_threads=num_threads,
             )
 
-    if arc.zone_ops is not None or arc.alley_ops is not None:
+    if not getattr(arc, "is_regional", False) and (
+        arc.zone_ops is not None or arc.alley_ops is not None
+    ):
         zone_ops = arc.zone_ops if arc.zone_ops is not None else cirq.Gateset()
         alley_ops = arc.alley_ops if arc.alley_ops is not None else cirq.Gateset()
         circuit = add_moves(

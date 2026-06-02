@@ -26,8 +26,24 @@ class ResourceEstimator:
     Class for resource estimator objects defined by the given architecture
     """
 
-    def __init__(self, arc: Architecture):
+    def __init__(self, arc: Architecture, layout=None):
         self.arc = arc
+        self.layout = layout
+
+    def _gate_cost(self, op: cirq.Operation) -> dict:
+        if getattr(self.arc, "is_regional", False):
+            return self.arc.gate_cost(op, self.layout)
+        return self.arc.gate_cost(op)
+
+    def _moment_cost(self, op: cirq.Operation) -> dict:
+        if getattr(self.arc, "is_regional", False):
+            return self.arc.moment_cost(op, self.layout)
+        return self.arc.moment_cost(op)
+
+    def _op_time(self, op: cirq.Operation) -> float:
+        if getattr(self.arc, "is_regional", False):
+            return self.arc.op_time(op, self.layout)
+        return self.arc.op_time(op)
 
     def validate_circuit_ops(self, circuit: cirq.Circuit) -> None:
         """
@@ -58,7 +74,7 @@ class ResourceEstimator:
             colour="cyan",
             disable=not bool(verbose),
         ):
-            cost += Counter(self.arc.gate_cost(op))
+            cost += Counter(self._gate_cost(op))
         if pretty:
             return {
                 obj.__name__ if hasattr(obj, "__name__") else str(obj): val
@@ -72,9 +88,7 @@ class ResourceEstimator:
         Adds up the total physical time from all logical primitives in the input circuit
         """
         self.validate_circuit_ops(circuit=circuit)
-        return sum(
-            map(lambda x: self.arc.total_time(self.arc.gate_cost(x)), circuit.all_operations())
-        )
+        return sum(map(self._op_time, circuit.all_operations()))
 
     def parallel_circuit_time(self, circuit: cirq.Circuit, verbose: int = 0) -> float:
         """
@@ -86,7 +100,7 @@ class ResourceEstimator:
             circuit.all_operations(), disable=not verbose, total=total_ops, colour="cyan"
         ):
             big_time = max(qubit_times[q] for q in op.qubits)
-            big_time += self.arc.op_time(op)
+            big_time += self._op_time(op)
             for qubit in op.qubits:
                 qubit_times[qubit] = big_time
         return max(qubit_times.values())
@@ -114,7 +128,7 @@ class ResourceEstimator:
             big_path = qubit_paths[big_qubit]
             big_time = qubit_times[big_qubit]
             big_path.append(op)
-            big_time += self.arc.op_time(op)
+            big_time += self._op_time(op)
             for qubit in op_qubits:
                 qubit_paths[qubit] = big_path.copy()
                 qubit_times[qubit] = big_time
@@ -137,8 +151,8 @@ class ResourceEstimator:
             op_qubits = op.qubits
             # This qubit currently has the longest path
             big_qubit = max(op_qubits, key=qubit_times.get)
-            big_time = qubit_times[big_qubit] + self.arc.op_time(op)
-            big_path = qubit_paths[big_qubit] + Counter(self.arc.moment_cost(op))
+            big_time = qubit_times[big_qubit] + self._op_time(op)
+            big_path = qubit_paths[big_qubit] + Counter(self._moment_cost(op))
             for qubit in op_qubits:
                 qubit_paths[qubit] = big_path
                 qubit_times[qubit] = big_time
@@ -158,4 +172,12 @@ class ResourceEstimator:
         """
         Calculates the physical qubit cost of the requested circuit
         """
+        if getattr(self.arc, "is_regional", False):
+            if self.layout is None:
+                raise ValueError("Regional physical qubit estimates require a layout")
+            total = 0
+            for node in self.layout.layout_graph.nodes:
+                region = self.layout.layout_graph.nodes[node].get("region", "compute")
+                total += self.arc.arch_for_region(region).patch.num_physical_qubits
+            return total
         return cirq.num_qubits(circuit) * self.arc.patch.num_physical_qubits

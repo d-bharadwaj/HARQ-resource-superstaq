@@ -1,0 +1,614 @@
+#################################################
+# UNCLASSIFIED: Not approved for public release #
+#################################################
+meta:
+    date: '20260521'
+    version_hash: 9152017052b891732c928ed6987cc2f637a40c65
+quantum_interconnects:
+    atom_atom:
+        direct:
+            rb_rb:
+            -   name: rb_rb_low_5cce
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 0.1
+                    efficiency: 5.0e-05
+                    error_x: 0.1
+                    error_z: 0.1
+                    modality: atom_atom
+                    name: rb_rb_low_5cce
+                    performance_tier: low
+                    species: rb_rb
+            -   name: rb_rb_medium_24e7
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 10.0
+                    efficiency: 0.005
+                    error_x: 0.02
+                    error_z: 0.02
+                    modality: atom_atom
+                    name: rb_rb_medium_24e7
+                    performance_tier: medium
+                    species: rb_rb
+            -   name: rb_rb_medium_61f0
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 50.0
+                    efficiency: 0.001
+                    error_x: 0.05
+                    error_z: 0.05
+                    modality: atom_atom
+                    name: rb_rb_medium_61f0
+                    performance_tier: medium
+                    species: rb_rb
+            -   name: rb_rb_high_4989
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 60.0
+                    efficiency: 0.025
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: atom_atom
+                    name: rb_rb_high_4989
+                    performance_tier: high
+                    species: rb_rb
+    atom_ion:
+        direct:
+            rb_yb:
+            -   name: rb_yb_low_06d6
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 2.0
+                    efficiency: 1.5e-05
+                    error_x: 0.16
+                    error_z: 0.16
+                    modality: atom_ion
+                    name: rb_yb_low_06d6
+                    performance_tier: low
+                    species: rb_yb
+            -   name: rb_yb_medium_19ef
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 12.0
+                    efficiency: 0.003
+                    error_x: 0.06
+                    error_z: 0.06
+                    modality: atom_ion
+                    name: rb_yb_medium_19ef
+                    performance_tier: medium
+                    species: rb_yb
+            -   name: rb_yb_medium_ef4a
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 52.0
+                    efficiency: 0.0003
+                    error_x: 0.05
+                    error_z: 0.05
+                    modality: atom_ion
+                    name: rb_yb_medium_ef4a
+                    performance_tier: medium
+                    species: rb_yb
+            -   name: rb_yb_high_9875
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 62.0
+                    efficiency: 0.015
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: atom_ion
+                    name: rb_yb_high_9875
+                    performance_tier: high
+                    species: rb_yb
+    atom_superconducting:
+        direct:
+            rb_transmon:
+            -   name: rb_transmon_low_e494
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 5.0
+                    efficiency: 2.0e-05
+                    error_x: 0.36
+                    error_z: 0.36
+                    modality: atom_superconducting
+                    name: rb_transmon_low_e494
+                    performance_tier: low
+                    species: rb_transmon
+            -   name: rb_transmon_medium_8d48
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 15.0
+                    efficiency: 0.009
+                    error_x: 0.28
+                    error_z: 0.28
+                    modality: atom_superconducting
+                    name: rb_transmon_medium_8d48
+                    performance_tier: medium
+                    species: rb_transmon
+            -   name: rb_transmon_high_836c
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 15.0
+                    efficiency: 0.03
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: atom_superconducting
+                    name: rb_transmon_high_836c
+                    performance_tier: high
+                    species: rb_transmon
+    ion_ion:
+        direct:
+            yb_yb:
+            -   name: yb_yb_low_98d7
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 0.1
+                    efficiency: 5.0e-05
+                    error_x: 0.1
+                    error_z: 0.1
+                    modality: ion_ion
+                    name: yb_yb_low_98d7
+                    performance_tier: low
+                    species: yb_yb
+            -   name: yb_yb_medium_1832
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 10.0
+                    efficiency: 0.005
+                    error_x: 0.05
+                    error_z: 0.05
+                    modality: ion_ion
+                    name: yb_yb_medium_1832
+                    performance_tier: medium
+                    species: yb_yb
+            -   name: yb_yb_medium_0a30
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 50.0
+                    efficiency: 0.001
+                    error_x: 0.05
+                    error_z: 0.05
+                    modality: ion_ion
+                    name: yb_yb_medium_0a30
+                    performance_tier: medium
+                    species: yb_yb
+            -   name: yb_yb_high_dee5
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 60.0
+                    efficiency: 0.025
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: ion_ion
+                    name: yb_yb_high_dee5
+                    performance_tier: high
+                    species: yb_yb
+    ion_superconducting:
+        direct:
+            transmon_yb:
+            -   name: transmon_yb_low_1a82
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000.0
+                    cost: 5.0
+                    efficiency: 2.0e-05
+                    error_x: 0.36
+                    error_z: 0.36
+                    modality: ion_superconducting
+                    name: transmon_yb_low_1a82
+                    performance_tier: low
+                    species: transmon_yb
+            -   name: transmon_yb_medium_3034
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 15.0
+                    efficiency: 0.009
+                    error_x: 0.28
+                    error_z: 0.28
+                    modality: ion_superconducting
+                    name: transmon_yb_medium_3034
+                    performance_tier: medium
+                    species: transmon_yb
+            -   name: transmon_yb_high_b3c2
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 10000.0
+                    cost: 15.0
+                    efficiency: 0.03
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: ion_superconducting
+                    name: transmon_yb_high_b3c2
+                    performance_tier: high
+                    species: transmon_yb
+    superconducting_superconducting:
+        direct:
+            transmon_transmon:
+            -   name: transmon_transmon_low_49eb
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 5000000.0
+                    cost: 0.1
+                    efficiency: 1.0
+                    error_x: 0.52
+                    error_z: 0.52
+                    modality: superconducting_superconducting
+                    name: transmon_transmon_low_49eb
+                    performance_tier: low
+                    species: transmon_transmon
+            -   name: transmon_transmon_low_2669
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 250000.0
+                    cost: 5.0
+                    efficiency: 9.0e-06
+                    error_x: 0.36
+                    error_z: 0.36
+                    modality: superconducting_superconducting
+                    name: transmon_transmon_low_2669
+                    performance_tier: low
+                    species: transmon_transmon
+            -   name: transmon_transmon_medium_7dc5
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 250000.0
+                    cost: 5.0
+                    efficiency: 0.018
+                    error_x: 0.28
+                    error_z: 0.28
+                    modality: superconducting_superconducting
+                    name: transmon_transmon_medium_7dc5
+                    performance_tier: medium
+                    species: transmon_transmon
+            -   name: transmon_transmon_high_e9a3
+                specifications:
+                    architecture: direct
+                    attempt_rate_hz: 1000000.0
+                    cost: 5.0
+                    efficiency: 0.23
+                    error_x: 0.005
+                    error_z: 0.005
+                    modality: superconducting_superconducting
+                    name: transmon_transmon_high_e9a3
+                    performance_tier: high
+                    species: transmon_transmon
+quantum_processors:
+    atom:
+        shuttled:
+            rb:
+            -   name: rb_low_ab28
+                specifications:
+                    architecture: shuttled
+                    coherence_time_us_x: 1000000.0
+                    coherence_time_us_z: 1000000.0
+                    compatible_interconnects:
+                    - rb_rb_low_5cce
+                    - rb_rb_medium_24e7
+                    - rb_yb_low_06d6
+                    - rb_yb_medium_19ef
+                    - rb_rb_medium_61f0
+                    - rb_rb_high_4989
+                    - rb_yb_medium_ef4a
+                    - rb_yb_high_9875
+                    - rb_transmon_low_e494
+                    - rb_transmon_medium_8d48
+                    - rb_transmon_high_836c
+                    connectivity_degree: 2.0
+                    connectivity_interconnects: arbitrary
+                    connectivity_topology: arbitrary
+                    cost: 0.3
+                    gates:
+                        1Q:
+                            durations_ns: 250.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        2Q:
+                            durations_ns: 400.0
+                            error_x: 0.007
+                            error_z: 0.007
+                        measure:
+                            durations_ns: 6000000.0
+                            error_x: 0.0004
+                            error_z: 0.0004
+                        prepare:
+                            durations_ns: 200000.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        shuttle:
+                            durations_ns: 200000.0
+                            error_x: 0.0
+                            error_z: 0.0
+                    max_qubits: 256.0
+                    modality: atom
+                    name: rb_low_ab28
+                    performance_tier: low
+                    species: rb
+            -   name: rb_medium_32a0
+                specifications:
+                    architecture: shuttled
+                    coherence_time_us_x: 1000000.0
+                    coherence_time_us_z: 1000000.0
+                    compatible_interconnects:
+                    - rb_rb_low_5cce
+                    - rb_rb_medium_24e7
+                    - rb_yb_low_06d6
+                    - rb_yb_medium_19ef
+                    - rb_rb_medium_61f0
+                    - rb_rb_high_4989
+                    - rb_yb_medium_ef4a
+                    - rb_yb_high_9875
+                    - rb_transmon_low_e494
+                    - rb_transmon_medium_8d48
+                    - rb_transmon_high_836c
+                    connectivity_degree: 2.0
+                    connectivity_interconnects: arbitrary
+                    connectivity_topology: arbitrary
+                    cost: 0.6
+                    gates:
+                        1Q:
+                            durations_ns: 250.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        2Q:
+                            durations_ns: 400.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        measure:
+                            durations_ns: 1000000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        prepare:
+                            durations_ns: 200000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        shuttle:
+                            durations_ns: 200000.0
+                            error_x: 0.0
+                            error_z: 0.0
+                    max_qubits: 1024.0
+                    modality: atom
+                    name: rb_medium_32a0
+                    performance_tier: medium
+                    species: rb
+    ion:
+        fixed:
+            yb:
+            -   name: yb_low_117c
+                specifications:
+                    architecture: fixed
+                    coherence_time_us_x: 1000000.0
+                    coherence_time_us_z: 1000000.0
+                    compatible_interconnects:
+                    - yb_yb_low_98d7
+                    - yb_yb_medium_1832
+                    - rb_yb_low_06d6
+                    - rb_yb_medium_19ef
+                    - yb_yb_medium_0a30
+                    - yb_yb_high_dee5
+                    - rb_yb_medium_ef4a
+                    - rb_yb_high_9875
+                    - transmon_yb_low_1a82
+                    - transmon_yb_medium_3034
+                    - transmon_yb_high_b3c2
+                    connectivity_degree: 21.0
+                    connectivity_interconnects: arbitrary
+                    connectivity_topology: arbitrary
+                    cost: 0.02
+                    gates:
+                        1Q:
+                            durations_ns: 135000.0
+                            error_x: 0.0005
+                            error_z: 0.0005
+                        2Q:
+                            durations_ns: 600000.0
+                            error_x: 0.004
+                            error_z: 0.004
+                        measure:
+                            durations_ns: 1000000.0
+                            error_x: 0.004
+                            error_z: 0.004
+                        prepare:
+                            durations_ns: 1000000.0
+                            error_x: 0.004
+                            error_z: 0.004
+                    max_qubits: 21.0
+                    modality: ion
+                    name: yb_low_117c
+                    performance_tier: low
+                    species: yb
+        shuttled:
+            yb:
+            -   name: yb_high_6016
+                specifications:
+                    architecture: shuttled
+                    coherence_time_us_x: 1000000.0
+                    coherence_time_us_z: 1000000.0
+                    compatible_interconnects:
+                    - yb_yb_low_98d7
+                    - yb_yb_medium_1832
+                    - rb_yb_low_06d6
+                    - rb_yb_medium_19ef
+                    - yb_yb_medium_0a30
+                    - yb_yb_high_dee5
+                    - rb_yb_medium_ef4a
+                    - rb_yb_high_9875
+                    - transmon_yb_low_1a82
+                    - transmon_yb_medium_3034
+                    - transmon_yb_high_b3c2
+                    connectivity_degree: 2.0
+                    connectivity_interconnects: edge
+                    connectivity_topology: 2d grid
+                    cost: 24.0
+                    gates:
+                        1Q:
+                            durations_ns: 10000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        2Q:
+                            durations_ns: 300000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        measure:
+                            durations_ns: 350000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        merge:
+                            durations_ns: 100000.0
+                            error_x: 0.0
+                            error_z: 0.0
+                        prepare:
+                            durations_ns: 500000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        shuttle:
+                            durations_ns: 15000.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        split:
+                            durations_ns: 100000.0
+                            error_x: 0.0
+                            error_z: 0.0
+                    max_qubits: 10000.0
+                    modality: ion
+                    name: yb_high_6016
+                    performance_tier: high
+                    species: yb
+    spin:
+        shuttled:
+            quantum dot:
+            -   name: quantum dot_high_9016
+                specifications:
+                    architecture: shuttled
+                    coherence_time_us_x: 2000000.0
+                    coherence_time_us_z: 100.0
+                    compatible_interconnects: []
+                    connectivity_degree: 2.0
+                    connectivity_interconnects: edge
+                    connectivity_topology: 4-pseudo 2-d grid
+                    cost: 0.8
+                    gates:
+                        1Q:
+                            durations_ns: 50.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        2Q:
+                            durations_ns: 20.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        measure:
+                            durations_ns: 1000.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        prepare:
+                            durations_ns: 1000.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        reconfigure:
+                            durations_ns: 20.0
+                            error_x: 0.01
+                            error_z: 0.01
+                        shuttle:
+                            durations_ns: 50.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                    max_qubits: 1000.0
+                    modality: spin
+                    name: quantum dot_high_9016
+                    performance_tier: high
+                    species: quantum dot
+    superconducting:
+        fixed:
+            cat:
+            -   name: cat_high_9775
+                specifications:
+                    architecture: fixed
+                    coherence_time_us_x: 10000000.0
+                    coherence_time_us_z: 1000.0
+                    compatible_interconnects: []
+                    connectivity_degree: 5.0
+                    connectivity_interconnects: edge
+                    connectivity_topology: grid
+                    cost: 3.5
+                    gates:
+                        1Q:
+                            durations_ns: 50.0
+                            error_x: 1.0e-09
+                            error_z: 0.0001
+                        2Q:
+                            durations_ns: 200.0
+                            error_x: 1.0e-08
+                            error_z: 0.001
+                        measure:
+                            durations_ns: 500.0
+                            error_x: 1.0e-07
+                            error_z: 0.01
+                        prepare:
+                            durations_ns: 200.0
+                            error_x: 1.0e-07
+                            error_z: 0.01
+                    max_qubits: 1000.0
+                    modality: superconducting
+                    name: cat_high_9775
+                    performance_tier: high
+                    species: cat
+            transmon:
+            -   name: transmon_high_2198
+                specifications:
+                    architecture: fixed
+                    coherence_time_us_x: 1000.0
+                    coherence_time_us_z: 1000.0
+                    compatible_interconnects:
+                    - transmon_transmon_low_49eb
+                    - transmon_transmon_low_2669
+                    - transmon_transmon_medium_7dc5
+                    - transmon_transmon_high_e9a3
+                    - transmon_yb_low_1a82
+                    - transmon_yb_medium_3034
+                    - transmon_yb_high_b3c2
+                    - rb_transmon_low_e494
+                    - rb_transmon_medium_8d48
+                    - rb_transmon_high_836c
+                    connectivity_degree: 6.0
+                    connectivity_interconnects: edge
+                    connectivity_topology: 2-plane torus
+                    cost: 294.0
+                    gates:
+                        1Q:
+                            durations_ns: 30.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                        2Q:
+                            durations_ns: 50.0
+                            error_x: 0.0005
+                            error_z: 0.0005
+                        measure:
+                            durations_ns: 400.0
+                            error_x: 0.001
+                            error_z: 0.001
+                        prepare:
+                            durations_ns: 200.0
+                            error_x: 0.0001
+                            error_z: 0.0001
+                    max_qubits: 10000.0
+                    modality: superconducting
+                    name: transmon_high_2198
+                    performance_tier: high
+                    species: transmon
+#################################################
+# UNCLASSIFIED: Not approved for public release #
+#################################################

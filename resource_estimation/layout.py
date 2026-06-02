@@ -596,6 +596,198 @@ class Heterogenous_MovementLayout(Layout):
         raise NotImplementedError
 
 
+class Square(Heterogenous_MovementLayout):
+    """
+    Regional layout with SSM memory/bus on the left and SSOQ compute/factories on the right.
+
+    The communication bus is a fixed-width vertical strip between memory and the
+    right-side regions. Logical qubits begin in memory and are staged into the
+    compute quadrant before operations are compiled.
+    """
+
+    def __init__(
+        self,
+        input_circuit: cirq.Circuit,
+        num_t_factories: int = 1,
+        num_s_factories: int | None = None,
+        compute_capacity: int = 4,
+        communication_width: int = 2,
+    ):
+        super().__init__(
+            input_circuit=input_circuit,
+            num_t_factories=num_t_factories,
+            num_s_factories=num_t_factories if num_s_factories is None else num_s_factories,
+            compute_capacity=compute_capacity,
+            communication_width=communication_width,
+        )
+
+    def _generate(self) -> None:
+        all_qubits = sorted(self.input_circuit.all_qubits())
+        if self.compute_capacity < 1:
+            raise ValueError("compute_capacity must be at least 1")
+        if self.communication_width != 2:
+            raise ValueError("Square uses a fixed 2-column communication bus")
+        max_arity = max((len(op.qubits) for op in self.input_circuit.all_operations()), default=1)
+        if self.compute_capacity < max_arity:
+            raise ValueError(
+                "compute_capacity must be at least as large as the widest operation "
+                f"in the circuit ({max_arity})"
+            )
+
+        slots_per_row = max(1, ceil(sqrt(self.compute_capacity)))
+        compute_rows = ceil(self.compute_capacity / slots_per_row)
+        compute_height = max(3, 2 * compute_rows - 1)
+        right_width = max(3, 2 * slots_per_row - 1)
+        memory_width = max(2, right_width)
+        factory_count = self.num_t_factories + self.num_s_factories
+        factory_slots_per_row = max(1, (right_width + 1) // 2)
+        factory_rows = ceil(max(1, factory_count) / factory_slots_per_row)
+        factory_height = max(3, 2 * factory_rows - 1)
+        height = max(
+            2 * compute_height,
+            compute_height + factory_height,
+            ceil(max(1, len(all_qubits)) / memory_width),
+        )
+
+        communication_start_col = memory_width
+        right_start_col = communication_start_col + self.communication_width
+        memory_cells = [
+            cirq.GridQubit(row, col)
+            for row in range(height)
+            for col in range(memory_width)
+        ]
+        communication_cells = [
+            cirq.GridQubit(row, col)
+            for row in range(height)
+            for col in range(communication_start_col, right_start_col)
+        ]
+        compute_cells = [
+            cirq.GridQubit(row, col)
+            for row in range(compute_height)
+            for col in range(right_start_col, right_start_col + right_width)
+        ]
+        factory_cells = [
+            cirq.GridQubit(row, col)
+            for row in range(compute_height, height)
+            for col in range(right_start_col, right_start_col + right_width)
+        ]
+        compute_positions = [
+            cirq.GridQubit(row, col)
+            for row in range(0, compute_height, 2)
+            for col in range(right_start_col, right_start_col + right_width, 2)
+        ][: self.compute_capacity]
+        factory_slot_positions = [
+            cirq.GridQubit(row, col)
+            for row in range(compute_height, height, 2)
+            for col in range(right_start_col, right_start_col + right_width, 2)
+        ][:factory_count]
+        t_factories = factory_slot_positions[: self.num_t_factories]
+        s_factories = factory_slot_positions[
+            self.num_t_factories : self.num_t_factories + self.num_s_factories
+        ]
+        factory_positions = set(t_factories + s_factories)
+        qubit_map = dict(zip(all_qubits, memory_cells[: len(all_qubits)]))
+
+        self._memory_map = qubit_map
+        self._compute_slots = compute_positions
+
+        G = nx.Graph()
+        G.add_nodes_from(
+            [
+                (
+                    q,
+                    dict(
+                        patch_type="data" if q in qubit_map.values() else "ancilla",
+                        region="memory",
+                    ),
+                )
+                for q in memory_cells
+            ],
+        )
+        G.add_nodes_from(
+            [(q, dict(patch_type="ancilla", region="communication")) for q in communication_cells],
+        )
+        G.add_nodes_from(
+            [
+                (
+                    q,
+                    dict(
+                        patch_type="data" if q in compute_positions else "ancilla",
+                        region="compute",
+                    ),
+                )
+                for q in compute_cells
+            ],
+        )
+        G.add_nodes_from(
+            [
+                (
+                    q,
+                    dict(
+                        patch_type="factory" if q in factory_positions else "ancilla",
+                        ftype="t" if q in t_factories else "s" if q in s_factories else None,
+                        region="factory",
+                        used=True if q in factory_positions else None,
+                    ),
+                )
+                for q in factory_cells
+            ],
+        )
+        for node in G.nodes:
+            for d_row, d_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                neighbor = cirq.GridQubit(node.row + d_row, node.col + d_col)
+                if neighbor in G:
+                    G.add_edge(node, neighbor)
+
+        self._all_factories = {node for node in G if G.nodes[node]["patch_type"] == "factory"}
+        self.layout_graph = G
+        self.mapped_circuit = self._memory_compute_circuit(qubit_map, compute_positions)
+        self.mapped_circuit = cirq.Circuit(cirq.I.on_each(*sorted(G.nodes))) + self.mapped_circuit
+
+    def route_factory_to_compute(
+        self,
+        factory: cirq.GridQubit,
+        compute_qubit: cirq.GridQubit,
+    ) -> list[cirq.GridQubit]:
+        return nx.shortest_path(self.layout_graph, source=factory, target=compute_qubit)
+
+    def moves_for_factory_to_compute(
+        self,
+        factory: cirq.GridQubit,
+        compute_qubit: cirq.GridQubit,
+    ) -> list[cirq.Operation]:
+        return []
+
+    def _moves_along_path(self, path: list[cirq.GridQubit]) -> cirq.Circuit:
+        operations = []
+        for left, right in zip(path, path[1:]):
+            left_region = self.layout_graph.nodes[left].get("region")
+            right_region = self.layout_graph.nodes[right].get("region")
+            regions = {left_region, right_region}
+            if left_region == right_region:
+                if left_region == "memory":
+                    operations.append(lsp.Move(zone=None, route_distance=1).on(left, right))
+                elif left_region == "communication":
+                    operations.append(lsp.CommunicationMove(route_distance=1).on(left, right))
+                continue
+            if regions <= {"memory", "communication"}:
+                operations.append(lsp.CommunicationMove(route_distance=1).on(left, right))
+            elif "communication" in regions and ("compute" in regions or "factory" in regions):
+                operations.append(
+                    lsp.ModalityTransfer(source=left_region, target=right_region).on(left, right)
+                )
+            elif regions <= {"compute", "factory"}:
+                continue
+            else:
+                operations.append(
+                    lsp.ModalityTransfer(source=left_region, target=right_region).on(left, right)
+                )
+        return cirq.Circuit(operations)
+
+    def route_cnot(self, ctrl: cirq.GridQubit, trgt: cirq.GridQubit):
+        return Layout.route_cnot(self, ctrl=ctrl, trgt=trgt)
+
+
 class Column(Layout):
     """
     Lattice surgery Layout based on having two columns of logical qubits

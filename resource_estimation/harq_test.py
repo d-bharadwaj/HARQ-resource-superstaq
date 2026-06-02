@@ -19,7 +19,7 @@ import pytest
 
 from resource_estimation import architecture, compile_ftqc, estimate
 from resource_estimation import lattice_surgery_primitives as lsp
-from resource_estimation.layout import Heterogenous_MovementLayout, MovementLayout
+from resource_estimation.layout import Heterogenous_MovementLayout, MovementLayout, Square
 
 
 @pytest.fixture
@@ -296,3 +296,95 @@ def test_movement_layout_t_teleportation_keeps_direct_factory_cnot():
         cirq.S,
         cirq.ResetChannel(),
     ]
+
+
+def test_square_layout_regions_and_transfer_route():
+    q0, q1 = cirq.LineQubit.range(2)
+    layout = Square(
+        input_circuit=cirq.Circuit(cirq.CNOT(q0, q1)),
+        num_t_factories=2,
+        num_s_factories=1,
+        compute_capacity=2,
+    )
+    graph = layout.layout_graph
+
+    assert {graph.nodes[node]["region"] for node in graph} == {
+        "memory",
+        "communication",
+        "compute",
+        "factory",
+    }
+    assert sum(1 for node in graph if graph.nodes[node]["region"] == "communication") % 2 == 0
+
+    memory = next(node for node in graph if graph.nodes[node]["region"] == "memory")
+    compute = next(
+        node
+        for node in graph
+        if graph.nodes[node]["region"] == "compute" and graph.nodes[node]["patch_type"] == "data"
+    )
+    route_ops = list(layout._moves_along_path(layout.route_through_communication(memory, compute)).all_operations())
+
+    assert any(isinstance(op.gate, lsp.CommunicationMove) for op in route_ops)
+    assert any(isinstance(op.gate, lsp.ModalityTransfer) for op in route_ops)
+
+
+def test_square_regional_compile_uses_compute_lattice_surgery():
+    q0, q1, q2 = cirq.LineQubit.range(3)
+    circuit = cirq.Circuit(cirq.CNOT(q0, q1), cirq.T(q2))
+    layout = Square(circuit, num_t_factories=2, num_s_factories=2, compute_capacity=2)
+    regional_arch = architecture.RegionalArchitecture.square_default(
+        d=5,
+        idling=False,
+        post_op_correction=False,
+        syndrome_rounds=1,
+    )
+
+    primitive_circuit = compile_ftqc.ft_compile(layout=layout, arc=regional_arch, verbose=0)
+    gates = [op.gate for op in primitive_circuit.all_operations()]
+
+    assert any(isinstance(gate, lsp.ModalityTransfer) for gate in gates)
+    assert any(isinstance(gate, lsp.Merge) for gate in gates)
+    assert any(isinstance(gate, lsp.Split) for gate in gates)
+    assert cirq.CNOT not in gates
+
+
+def test_square_regional_compile_routes_many_factories():
+    q0, q1, q2 = cirq.LineQubit.range(3)
+    circuit = cirq.Circuit(cirq.CNOT(q0, q1), cirq.T(q2), cirq.S(q2))
+    layout = Square(circuit, num_t_factories=5, num_s_factories=5, compute_capacity=4)
+    regional_arch = architecture.RegionalArchitecture.square_default(
+        d=5,
+        idling=False,
+        post_op_correction=False,
+        syndrome_rounds=1,
+    )
+
+    primitive_circuit = compile_ftqc.ft_compile(layout=layout, arc=regional_arch, verbose=0)
+    gates = [op.gate for op in primitive_circuit.all_operations()]
+
+    assert any(isinstance(gate, lsp.Merge) for gate in gates)
+    assert any(isinstance(gate, lsp.Split) for gate in gates)
+
+
+def test_square_regional_estimator_uses_regions_for_costs():
+    q0, q1 = cirq.LineQubit.range(2)
+    circuit = cirq.Circuit(cirq.CNOT(q0, q1))
+    layout = Square(circuit, num_t_factories=1, num_s_factories=1, compute_capacity=2)
+    regional_arch = architecture.RegionalArchitecture.square_default(
+        d=5,
+        idling=False,
+        post_op_correction=False,
+        syndrome_rounds=1,
+        transfer_penalty=2,
+    )
+    primitive_circuit = compile_ftqc.ft_compile(layout=layout, arc=regional_arch, verbose=0)
+    estimator = estimate.ResourceEstimator(regional_arch, layout=layout)
+
+    assert estimator.parallel_circuit_time(primitive_circuit) > 0
+    assert estimator.parallel_circuit_cost(primitive_circuit, pretty=True)["ModalityTransfer"] > 0
+
+    expected_qubits = sum(
+        regional_arch.arch_for_region(attrs["region"]).patch.num_physical_qubits
+        for _, attrs in layout.layout_graph.nodes(data=True)
+    )
+    assert estimator.physical_qubits(primitive_circuit) == expected_qubits

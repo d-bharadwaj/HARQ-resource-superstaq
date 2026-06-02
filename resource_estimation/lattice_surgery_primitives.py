@@ -36,6 +36,8 @@ def custom_resolver(cirq_type: str) -> type[cirq.Gate] | None:
         return Move
     if cirq_type == "lsp.CommunicationMove":
         return CommunicationMove
+    if cirq_type == "lsp.ModalityTransfer":
+        return ModalityTransfer
 
 
 @cirq.value_equality
@@ -327,6 +329,49 @@ class CommunicationMove(cirq.Gate):
 
     def _value_equality_values_(self) -> tuple:
         return (self._route_distance,)
+
+
+@cirq.value_equality
+class ModalityTransfer(cirq.Gate):
+    """
+    Placeholder primitive for moving a logical patch across hardware modalities.
+
+    The current model uses this to mark boundaries such as neutral-atom movement
+    regions handing a patch to a superconducting compute/factory region.
+    """
+
+    def __init__(self, source: str | None = None, target: str | None = None):
+        self._source = source
+        self._target = target
+
+    def num_qubits(self):
+        return 2
+
+    @property
+    def source(self):
+        return self._source
+
+    @property
+    def target(self):
+        return self._target
+
+    def __str__(self):
+        if self.source is None or self.target is None:
+            return "MODALITY_TRANSFER"
+        return f"MODALITY_TRANSFER({self.source}->{self.target})"
+
+    def _json_dict_(self):
+        return {"source": self._source, "target": self._target}
+
+    def __repr__(self) -> str:
+        return f"lsp.ModalityTransfer(source={self._source!r}, target={self._target!r})"
+
+    @classmethod
+    def _json_namespace_(cls) -> str:
+        return "lsp"
+
+    def _value_equality_values_(self) -> tuple:
+        return self._source, self._target
 
 
 class RotatedCodePatch:

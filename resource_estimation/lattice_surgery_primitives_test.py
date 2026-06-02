@@ -291,7 +291,13 @@ def test_repr():
     communication_move = lsp.CommunicationMove(route_distance=5).on(qa, qb)
     assert (
         repr(communication_move)
-        == "lsp.CommunicationMove(route_distance=5)(cirq.LineQubit(0), cirq.LineQubit(1))"
+        == "lsp.CommunicationMove(route_distance=5).on(cirq.LineQubit(0), cirq.LineQubit(1))"
+    )
+
+    modality_transfer = lsp.ModalityTransfer(source="memory", target="compute").on(qa, qb)
+    assert (
+        repr(modality_transfer)
+        == "lsp.ModalityTransfer(source='memory', target='compute').on(cirq.LineQubit(0), cirq.LineQubit(1))"
     )
 
 
